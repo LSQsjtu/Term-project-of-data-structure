@@ -17,6 +17,7 @@ public:
          * TODO add data members
          *   just add whatever you want.
          */
+        T *data;
     public:
         /**
          * return a new iterator which pointer n-next elements

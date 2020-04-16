@@ -402,6 +402,8 @@ std::pair<bool, double> iteratorAddENChecker() {
     }
     timer.init();
     for (int i = 0; i < N; i++) {
+        if(i==3950)
+        std::cout<<" ";
         if (*(a.begin() += i) != *(b.begin() += i)) {
             return std::make_pair(false, 0);
         }

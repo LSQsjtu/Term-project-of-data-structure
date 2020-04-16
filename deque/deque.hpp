@@ -207,11 +207,23 @@ public:
         /**
          * TODO *it
          */
-        T &operator*() const { return *cur; }
+        T &operator*() const
+        {
+            int n = *this - container->start;
+            if (n < 0 || n >= container->size())
+                throw invalid_iterator();
+            return *cur;
+        }
         /**
          * TODO it->field
          */
-        T *operator->() const noexcept { return &(operator*()); }
+        T *operator->() const noexcept
+        {
+            int n = *this - container->start;
+            if (n < 0 || n >= container->size())
+                throw invalid_iterator();
+            return &(operator*());
+        }
         /**
          * a operator to check whether two iterators are same (pointing to the same memory).
          */
@@ -231,7 +243,7 @@ public:
         // data members.
         const deque<T> *container;
         long long mapIndex;
-        const T *cur;
+        T *cur;
 
     public:
         const_iterator() : mapIndex(-1), cur(nullptr), container(nullptr)
@@ -296,7 +308,7 @@ public:
             }
 
             int tmp =
-                (mapIndex - rhs.mapIndex) * BuckSize + (cur - container->map[mapIndex]) - (map[rhs.mapIndex] - rhs.cur);
+                (mapIndex - rhs.mapIndex) * BuckSize + (cur - container->map[mapIndex]) - (container->map[rhs.mapIndex] - rhs.cur);
             return tmp;
         }
         const_iterator &operator+=(const int &n)
@@ -375,11 +387,23 @@ public:
         /**
          * TODO *it
          */
-        T &operator*() const { return *cur; }
+        T &operator*() const
+        {
+            int n = *this - container->start;
+            if (n < 0 || n >= container->size())
+                throw invalid_iterator();
+            return *cur;
+        }
         /**
          * TODO it->field
          */
-        T *operator->() const noexcept { return &(operator*()); }
+        T *operator->() const noexcept
+        {
+            int n = *this - container->start;
+            if (n < 0 || n >= container->size())
+                throw invalid_iterator();
+            return &(operator*());
+        }
         /**
          * a operator to check whether two iterators are same (pointing to the same memory).
          */
@@ -421,7 +445,7 @@ public:
         finish = iterator(this, other.finish.mapIndex, map[other.finish.mapIndex] + last);
         for (int i = 0; i < other.size(); ++i)
         {
-            new (start.cur) T(*(other.start + i));
+            new ((start + i).cur) T(*(other.start + i));
         }
     }
     /**
@@ -467,7 +491,7 @@ public:
         finish = iterator(this, other.finish.mapIndex, map[other.finish.mapIndex] + last);
         for (int i = 0; i < other.size(); ++i)
         {
-            new ((start+i).cur) T(*(other.start + i));
+            new ((start + i).cur) T(*(other.start + i));
         }
         return *this;
     }
@@ -477,28 +501,28 @@ public:
      */
     T &at(const size_t &pos)
     {
-        if (pos > size())
+        if (pos >= size() || pos < 0)
             throw index_out_of_bound();
         else
             return *(start + pos);
     }
     const T &at(const size_t &pos) const
     {
-        if (pos > size())
+        if (pos >= size() || pos < 0)
             throw index_out_of_bound();
         else
             return *(start + pos);
     }
     T &operator[](const size_t &pos)
     {
-        if (pos > size())
+        if (pos >= size() || pos < 0)
             throw index_out_of_bound();
         else
             return *(start + pos);
     }
     const T &operator[](const size_t &pos) const
     {
-        if (pos > size())
+        if (pos >= size() || pos < 0)
             throw index_out_of_bound();
         else
             return *(start + pos);
@@ -554,30 +578,32 @@ public:
         }
         for (long long i = 0; i < mapsize; ++i)
         {
-            free(map[i]);
+            if (!map[i])
+                free(map[i]);
         }
-        free(map);
+        if (!map)
+            free(map);
         mapsize = 1;
         finish = iterator(this, 0, map[0]);
         start = iterator(this, 0, map[0]);
     }
-    void copy(iterator bgn, iterator end, iterator front)
+    void copy(iterator &bgn, iterator end, iterator front)
     {
         while (true)
         {
-            if (bgn == end)
+            if (bgn.cur == end.cur)
                 return;
-            new (front.cur) T(*bgn);
+            *(front.cur) = (*bgn);
             ++front;
             ++bgn;
         }
     }
-    void copy_backward(iterator bgn, iterator end, iterator back)
+    void copy_backward(iterator bgn, iterator &end, iterator back)
     {
         while (true)
         {
-            new (back.cur) T(*end);
-            if (end == bgn)
+            *(back.cur) = (*end);
+            if (end.cur == bgn.cur)
                 return;
             --back;
             --end;
@@ -608,24 +634,25 @@ public:
             T x_copy = value;
             long long elem_before = pos - start; //插入点之前的元素个数
             if (elem_before < 0 || elem_before > finish - start)
-                throw;
+                throw invalid_iterator();
             if (elem_before < (finish - pos))
             {
-                iterator front_old(start);          //记录最初的起始位置
-                push_front(front());                //在最前端加入一个与第一元素相同的元素
+                push_front(front()); //在最前端加入一个与第一元素相同的元素
+                iterator front_old(start + 1);
                 iterator move_front(front_old + 1); //原起始位置的元素已压入最前端，因此从原起始位置的下一位置开始移动
                 copy(move_front, pos, front_old);   //将 [move_front, pos) 内的元素前移一格
-                --pos;                              //pos 前移指向插入位置
+                pos = move_front;
+                --pos; //pos 前移指向插入位置
             }
             else
             {
-                iterator back_old = finish;
                 push_back(back());
+                iterator back_old = finish - 1;
                 iterator move_back = back_old - 1;       //从原结束位置的前一位置开始复制
                 copy_backward(pos, move_back, back_old); //移动元素
-                                                         //注意：pos 已经指向正确的插入位置
+                pos = move_back;                         //注意：pos 已经指向正确的插入位置
             }
-            *pos.cur = x_copy;
+            *(pos.cur) = x_copy;
             return pos;
         }
     }
@@ -639,22 +666,34 @@ public:
     {
         iterator next(pos);
         long long elem_before = pos - start; //清除点之前的元素个数
-        if (empty() || elem_before < 0 || elem_before > finish - start)
-            throw;
-        if (elem_before < (finish - next))
+        if (empty() || elem_before < 0 || elem_before >= finish - start)
+            throw invalid_iterator();
+        if (pos == start)
         {
-            --next;
-            copy_backward(start, next, pos);
-            pop_front(); //移动完毕，第一个元素多余，将其清除
+            pop_front();
+            return start;
+        }
+        else if (pos == finish - 1)
+        {
+            pop_back();
+            return end();
         }
         else
         {
-            ++next;
-            copy(next, finish, pos);
-            new ((finish - 1).cur) T(*finish);
-            pop_back(); //移动完毕，最后一个元素多余，将其清除
+            if (elem_before < (finish - next))
+            {
+                --next;
+                copy_backward(start, next, pos);
+                pop_front(); //移动完毕，第一个元素多余，将其清除
+            }
+            else
+            {
+                ++next;
+                copy(next, finish, pos);
+                pop_back(); //移动完毕，最后一个元素多余，将其清除
+            }
+            return start + elem_before;
         }
-        return start + elem_before;
     }
     /**
      * adds an element to the end
@@ -683,7 +722,7 @@ public:
     void pop_back()
     {
         if (empty())
-            throw;
+            throw container_is_empty();
         else
         {
             --finish;
@@ -695,7 +734,7 @@ public:
      */
     void push_front(const T &value)
     {
-        if (begin().cur == map[0])
+        if (start.cur == map[0])
         {
             reallocateMap();
             map[start.mapIndex - 1] = (T *)malloc(sizeof(T) * BuckSize);
@@ -717,7 +756,7 @@ public:
     void pop_front()
     {
         if (empty())
-            throw;
+            throw container_is_empty();
         else
         {
             start.cur->~T();

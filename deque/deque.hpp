@@ -1,6 +1,6 @@
 #ifndef SJTU_DEQUE_HPP
 #define SJTU_DEQUE_HPP
-#define BuckSize 500
+#define BuckSize 800
 #include "exceptions.hpp"
 
 #include <cstddef>
@@ -27,27 +27,26 @@ public:
         //配置新map空间
         T **new_map = (T **)malloc(sizeof(T *) * new_mapsize);
         memset(new_map, 0, sizeof(T *) * new_mapsize);
-        for (int i = 0; i < mapsize; ++i)
+        size_t new_startmapIndex=(new_mapsize+start.mapIndex-finish.mapIndex)/2;
+        for (int i = 0; i < new_startmapIndex; ++i)
         {
             new_map[i] = (T *)malloc(sizeof(T) * BuckSize);
             memset(new_map[i], 0, sizeof(T) * BuckSize);
         }
-        for (int i = 0; i < mapsize; ++i)
+        for (int i = start.mapIndex; i <= finish.mapIndex; ++i)
         {
-            new_map[i + mapsize] = map[i];
+            new_map[i + new_startmapIndex-start.mapIndex] = map[i];
         }
-        for (int i = 0; i < mapsize; ++i)
+        for (int i =new_startmapIndex+finish.mapIndex-start.mapIndex+1; i < new_mapsize; ++i)
         {
-            new_map[i + 2 * mapsize] = (T *)malloc(sizeof(T) * BuckSize);
-            memset(new_map[i + 2 * mapsize], 0, sizeof(T) * BuckSize);
+            new_map[i] = (T *)malloc(sizeof(T) * BuckSize);
+            memset(new_map[i], 0, sizeof(T) * BuckSize);
         }
-        //释放原map
         free(map);
-        //设定新的map的地址和大小
         map = new_map;
         mapsize = new_mapsize;
-        start = iterator(this, mapsize / 3 + start.mapIndex, start.cur);
-        finish = iterator(this, mapsize / 3 + finish.mapIndex, finish.cur);
+        finish = iterator(this, new_startmapIndex + finish.mapIndex-start.mapIndex, finish.cur);
+        start = iterator(this, new_startmapIndex, start.cur);
     }
     class iterator
     {
@@ -308,7 +307,7 @@ public:
             }
 
             int tmp =
-                (mapIndex - rhs.mapIndex) * BuckSize + (cur - container->map[mapIndex]) - (container->map[rhs.mapIndex] - rhs.cur);
+                (mapIndex - rhs.mapIndex - 1) * BuckSize + (cur - container->map[mapIndex]) + (rhs.container->map[rhs.mapIndex] + BuckSize - rhs.cur);
             return tmp;
         }
         const_iterator &operator+=(const int &n)
@@ -443,7 +442,8 @@ public:
             last = other.finish.cur - other.map[other.finish.mapIndex];
         start = iterator(this, other.start.mapIndex, map[other.start.mapIndex] + first);
         finish = iterator(this, other.finish.mapIndex, map[other.finish.mapIndex] + last);
-        for (int i = 0; i < other.size(); ++i)
+        int memory=other.size();
+        for (int i = 0; i < memory; ++i)
         {
             new ((start + i).cur) T(*(other.start + i));
         }
@@ -465,9 +465,11 @@ public:
     {
         if (this == &other)
             return *this;
-        for (int i = 0; i < size(); ++i)
+        int thismemory=size();
+        for (int i = 0; i < thismemory; ++i)
         {
-            (start + i).cur->~T();
+            start.cur->~T();
+            ++start;
         }
         for (long long i = 0; i < mapsize; i++)
         {
@@ -489,7 +491,8 @@ public:
             last = other.finish.cur - other.map[other.finish.mapIndex];
         start = iterator(this, other.start.mapIndex, map[other.start.mapIndex] + first);
         finish = iterator(this, other.finish.mapIndex, map[other.finish.mapIndex] + last);
-        for (int i = 0; i < other.size(); ++i)
+        int memory=other.size();
+        for (int i = 0; i < memory; ++i)
         {
             new ((start + i).cur) T(*(other.start + i));
         }
@@ -572,9 +575,11 @@ public:
      */
     void clear()
     {
-        for (int i = 0; i < size(); ++i)
+        int thismemory=size();
+        for (int i = 0; i < thismemory; ++i)
         {
-            (start + i).cur->~T();
+            start.cur->~T();
+            ++start;
         }
         for (long long i = 0; i < mapsize; ++i)
         {

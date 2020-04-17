@@ -1092,6 +1092,8 @@ std::pair<bool, double> iteratorInsertPersistenceChecker() {
         if (b.begin() + delta != itB) {
             return std::make_pair(false, 0);
         }
+        if(i==2547)
+        int k=0;
         itA = a.insert(itA, tmp);
         itB = b.insert(itB, tmp);
         delta = itA - a.begin();

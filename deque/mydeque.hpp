@@ -1,6 +1,6 @@
 #ifndef SJTU_DEQUE_HPP
 #define SJTU_DEQUE_HPP
-#define BuckSize 800
+#define BuckSize 700
 #include "exceptions.hpp"
 
 #include <cstddef>

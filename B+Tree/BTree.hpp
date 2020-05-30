@@ -802,6 +802,29 @@ namespace sjtu
                 return;
             if (merge_right_node(node))
                 return;
+            internalNode par;//node非头节点且无左右
+            fileRead(&par,node.parent,1,sizeof(internalNode));
+            if (par.parent==0)
+            {
+                info.root=node.offset;
+                node.parent=0;
+                fileWrite(&info,info_offset,1,sizeof(TreeInfo));
+                fileWrite(&node,node.offset,1,sizeof(internalNode));
+            }
+            else{
+                internalNode grandpar;
+                fileRead(&grandpar,par.parent,1,sizeof(internalNode));
+                
+                for(int pos=0;pos<grandpar.cnt;++pos)
+                if(grandpar.child[pos]==par.offset)
+                {
+                    grandpar.child[pos]=node.offset;
+                    break;
+                }
+                node.parent=grandpar.offset;
+                fileWrite(&node,node.offset,1,sizeof(internalNode));
+                fileWrite(&grandpar,grandpar.offset,1,sizeof(internalNode));
+            }
         }
 
     public:
@@ -1107,8 +1130,14 @@ namespace sjtu
         // return an iterator whose key is the smallest key greater or equal than 'key'
         iterator lower_bound(const Key &key)
         {
-            iterator temp = find(key);
-            return --temp;
+            off_t leaf_offset = locate_leaf(key, info.root);
+
+            leafNode leaf;
+            fileRead(&leaf, leaf_offset, 1, sizeof(leafNode));
+            for (int i = 0; i < leaf.cnt; i++)
+                if (leaf.data[i].first >= key)
+                    return iterator(this, leaf_offset, i);
+            return end();
         }
     };
-}; // namespace sjtu
+} // namespace sjtu

@@ -117,6 +117,8 @@ void test_erase_random()
     bool flag;
     for (int i = 1; i <= n; ++i)
     {
+        if (i == 5418)
+            int j = 1;
         flag = tree.erase(v1[i]);
         if (!flag)
         {

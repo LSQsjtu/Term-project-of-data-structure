@@ -1,4 +1,3 @@
-#include "utility.hpp"
 #include <functional>
 #include <cstddef>
 #include <cstring>
@@ -11,30 +10,39 @@ namespace sjtu
     {
     public:
         class iterator;
-        typedef pair<Key, Value> value_type;
 
     private:
-        // Your private members go here加上一个最小键，方便看是否超出
-        static const int M = 4080 / (sizeof(size_t) + sizeof(Key)); //4096-sizeof(bool) - sizeof(int) - sizeof(size_t)-sizeof(off_t)
-        static const int L = 4080 / (sizeof(value_type));           //4096-sizeof(int)-sizeof(size_t)*3-sizeof(off_t)
+        // Your private members go here
+        static const int M = (4096 - sizeof(bool) - sizeof(int) * 3) / (sizeof(int) + sizeof(Key));
+        static const int L = (4096 - sizeof(int) * 5) / (sizeof(Key) + sizeof(Value));
         static const int Mmin = M / 2;
         static const int Lmin = L / 2;
-        static const int info_offset = 0;
+        int info_offset = 0;
         struct name
         {
             char *str;
             name() { str = new char[10]; }
-            ~name() { delete str; }
+            ~name()
+            {
+                if (str != nullptr)
+                    delete str;
+            }
             void naming(const char *oth) { strcpy(str, oth); }
+        };
+
+        struct value_type
+        {
+            Key first;
+            Value second;
         };
 
         struct TreeInfo
         {
-            size_t head; //head of leaf
-            size_t tail; //tail of leaf
-            size_t root; //root of BTree
-            size_t size; //size of BTree
-            off_t eof;   //end of file
+            int head; //head of leaf
+            int tail; //tail of leaf
+            int root; //root of BTree
+            int size; //size of BTree
+            int eof;  //end of file
 
             TreeInfo()
             {
@@ -48,10 +56,10 @@ namespace sjtu
 
         struct leafNode
         {
-            off_t offset;
-            size_t parent;
-            size_t pre;
-            size_t next;
+            int offset;
+            int parent;
+            int pre;
+            int next;
             int cnt; //number of pairs in leaf
             value_type data[L];
             leafNode()
@@ -64,9 +72,9 @@ namespace sjtu
 
         struct internalNode
         {
-            off_t offset;
-            size_t parent;
-            size_t child[M];
+            int offset;
+            int parent;
+            int child[M];
             Key key[M];
             int cnt;
             bool type; // child is leaf or not
@@ -84,40 +92,15 @@ namespace sjtu
         TreeInfo info;
         FILE *file;
         name filename;
-        bool fileOpen = false;
-        bool fileExist = false;
 
-        void openFile()
-        {
-            fileExist = 1;
-            if (fileOpen == 0)
-            {
-                file = fopen(filename.str, "rb+");
-                if (file == nullptr)
-                {
-                    fileExist = 0;
-                    file = fopen(filename.str, "wb+");
-                }
-                else
-                    fileRead(&info, info_offset, 1, sizeof(TreeInfo));
-                fileOpen = 1;
-            }
-        }
-
-        void closeFile()
-        {
-            if (fileOpen == 1)
-                fclose(file);
-            fileOpen = 0;
-        }
         //place指针，设为void，可以写入任意类型;offset：在文件中读取的位置;num:向后读多少个
-        void fileRead(void *place, off_t offset, size_t num, size_t size) const
+        void fileRead(void *place, int offset, int num, int size) const
         {
             fseek(file, offset, SEEK_SET);
             fread(place, size, num, file);
         }
 
-        void fileWrite(void *place, off_t offset, size_t num, size_t size) const
+        void fileWrite(void *place, int offset, int num, int size) const
         {
             fseek(file, offset, SEEK_SET);
             fwrite(place, size, num, file);
@@ -126,14 +109,14 @@ namespace sjtu
         FILE *filefrom;
         name filefromName;
 
-        void copy_fileRead(void *place, off_t offset, size_t num, size_t size) const
+        void copy_fileRead(void *place, int offset, int num, int size) const
         {
             fseek(filefrom, offset, SEEK_SET);
             fread(place, size, num, filefrom);
         }
 
-        off_t prevLeaf;                                                      // 前一个叶子
-        void copy_leaf(off_t offset, off_t from_offset, off_t parent_offset) //在复制函数中会用到位置，from叶子的位置，from叶子的父亲的地址
+        int prevLeaf;                                                  // 前一个叶子
+        void copy_leaf(int offset, int from_offset, int parent_offset) //在复制函数中会用到位置，from叶子的位置，from叶子的父亲的地址
         {
             leafNode leaf, leafFrom, preleaf;
             copy_fileRead(&leafFrom, from_offset, 1, sizeof(leafNode));
@@ -155,8 +138,7 @@ namespace sjtu
 
             for (int i = 0; i < leaf.cnt; i++)
             {
-                leaf.data[i].first = leafFrom.data[i].first;
-                leaf.data[i].second = leafFrom.data[i].second;
+                leaf.data[i] = leafFrom.data[i];
             }
 
             fileWrite(&leaf, offset, 1, sizeof(leafNode));
@@ -165,7 +147,7 @@ namespace sjtu
             prevLeaf = offset; //为下一个叶子的连接做准备
         }
 
-        void copy_node(off_t offset, off_t from_offset, off_t parent_offset)
+        void copy_node(int offset, int from_offset, int parent_offset)
         {
             internalNode node, node_from;
             copy_fileRead(&node_from, from_offset, 1, sizeof(internalNode));
@@ -189,7 +171,7 @@ namespace sjtu
             fileWrite(&node, offset, 1, sizeof(internalNode));
         }
 
-        size_t locate_leaf(const Key &key, off_t offset) const //返回leaf.offset，从root开始找，key[0]为最小值
+        int locate_leaf(const Key &key, int offset) const //返回leaf.offset，从root开始找，key[0]为最小值
         {
             internalNode p;
             fileRead(&p, offset, 1, sizeof(internalNode));
@@ -218,7 +200,6 @@ namespace sjtu
 
         bool insertLeaf(leafNode &leaf, const Key &key, const Value &value)
         {
-            iterator ret;
             int pos = 0;
 
             for (; pos < leaf.cnt; ++pos) //找到key位于pos - 1到pos之间
@@ -239,19 +220,16 @@ namespace sjtu
 
             ++leaf.cnt;
             ++info.size;
-            ret.tree = this;
-            ret.offset = leaf.offset;
-            ret.place = pos;
 
             fileWrite(&info, info_offset, 1, sizeof(TreeInfo));
             if (leaf.cnt < L)
                 fileWrite(&leaf, leaf.offset, 1, sizeof(leafNode));
             else
-                splitLeaf(leaf, ret, key);
+                splitLeaf(leaf, key);
             return true;
         }
 
-        void insertNode(internalNode &node, const Key &key, size_t ch)
+        void insertNode(internalNode &node, const Key &key, int ch)
         {
             int pos = 0;
             for (; pos < node.cnt; pos++)
@@ -273,7 +251,7 @@ namespace sjtu
                 splitNode(node);
         }
 
-        void splitLeaf(leafNode &leaf, iterator &it, const Key &key)
+        void splitLeaf(leafNode &leaf, const Key &key)
         {
             leafNode newleaf;
             newleaf.cnt = leaf.cnt - (leaf.cnt / 2);
@@ -284,13 +262,7 @@ namespace sjtu
 
             for (int i = 0; i < newleaf.cnt; i++)
             {
-                newleaf.data[i].first = leaf.data[i + leaf.cnt].first;
-                newleaf.data[i].second = leaf.data[i + leaf.cnt].second;
-                if (newleaf.data[i].first == key)
-                {
-                    it.offset = newleaf.offset;
-                    it.place = i;
-                }
+                newleaf.data[i] = leaf.data[i + leaf.cnt];
             }
 
             newleaf.next = leaf.next;
@@ -318,7 +290,7 @@ namespace sjtu
         void splitNode(internalNode &node)
         {
             internalNode newnode;
-            newnode.cnt = node.cnt - node.cnt / 2;
+            newnode.cnt = node.cnt - (node.cnt / 2);
             node.cnt = node.cnt / 2;
             newnode.parent = node.parent;
             newnode.type = node.type;
@@ -419,13 +391,14 @@ namespace sjtu
                 return false;
 
             Key key, newKey;
-            key = leftLeaf.data[0].first;
-            newKey = leftLeaf.data[1].first;
-            leaf.data[leaf.cnt].first = leftLeaf.data[0].first;leaf.data[leaf.cnt].second = leftLeaf.data[0].second;
+            key = leaf.data[0].first;
+            newKey = leftLeaf.data[leftLeaf.cnt - 1].first;
+            leaf.data[leaf.cnt] = leftLeaf.data[0];
+            for (int i = leaf.cnt - 1; i >= 0; --i)
+                leaf.data[i + 1] = leaf.data[i];
             leaf.cnt++;
             leftLeaf.cnt--;
-            for (int i = 0; i < leftLeaf.cnt; i++)
-                {leftLeaf.data[i].first = leftLeaf.data[i + 1].first;leftLeaf.data[i].second = leftLeaf.data[i + 1].second;}
+            leaf.data[0] = leftLeaf.data[leftLeaf.cnt];
 
             internalNode node;
             fileRead(&node, leaf.parent, 1, sizeof(internalNode));
@@ -456,12 +429,13 @@ namespace sjtu
             Key key, newKey;
             key = rightLeaf.data[0].first;
             newKey = rightLeaf.data[1].first;
-            leaf.data[leaf.cnt].first = rightLeaf.data[0].first;
-            leaf.data[leaf.cnt].second = rightLeaf.data[0].second;
+            leaf.data[leaf.cnt] = rightLeaf.data[0];
             leaf.cnt++;
             rightLeaf.cnt--;
             for (int i = 0; i < rightLeaf.cnt; i++)
-                {rightLeaf.data[i].first = rightLeaf.data[i + 1].first;rightLeaf.data[i].second = rightLeaf.data[i + 1].second;}
+            {
+                rightLeaf.data[i] = rightLeaf.data[i + 1];
+            }
 
             internalNode node;
             fileRead(&node, leaf.parent, 1, sizeof(internalNode));
@@ -490,8 +464,7 @@ namespace sjtu
                 return false;
             for (int i = 0; i < leaf.cnt; ++i)
             {
-                leftLeaf.data[leftLeaf.cnt].first = leaf.data[i].first;
-                leftLeaf.data[leftLeaf.cnt].second = leaf.data[i].second;
+                leftLeaf.data[leftLeaf.cnt] = leaf.data[i];
                 leftLeaf.cnt++;
             }
             leftLeaf.next = leaf.next;
@@ -541,8 +514,7 @@ namespace sjtu
                 return false;
             for (int i = 0; i < rightLeaf.cnt; ++i)
             {
-                leaf.data[leaf.cnt].first = rightLeaf.data[i].first;
-                leaf.data[leaf.cnt].second = rightLeaf.data[i].second;
+                leaf.data[leaf.cnt] = rightLeaf.data[i];
                 leaf.cnt++;
             }
             leaf.next = rightLeaf.next;
@@ -588,7 +560,7 @@ namespace sjtu
                 return;
             if (borrow_right(leaf))
                 return;
-            if (merge_left(leaf))//左右节点为Mmin或Lmin
+            if (merge_left(leaf)) //左右节点为Mmin或Lmin
                 return;
             if (merge_right(leaf))
                 return;
@@ -617,9 +589,10 @@ namespace sjtu
             ++node.cnt;
             --right.cnt;
             for (int i = 0; i < right.cnt; ++i)
+            {
                 right.key[i] = right.key[i + 1];
-            for (int i = 0; i < right.cnt; ++i)
                 right.child[i] = right.child[i + 1];
+            }
             par.key[pos + 1] = right.key[0];
 
             if (node.type == 1)
@@ -778,12 +751,12 @@ namespace sjtu
                 ++left.cnt;
             }
 
-            for (int i = pos; i < par.cnt - 1; ++i)
+            --par.cnt;
+            for (int i = pos; i < par.cnt; ++i)
             {
                 par.key[i] = par.key[i + 1];
                 par.child[i] = par.child[i + 1];
             }
-            --par.cnt;
             fileWrite(&left, left.offset, 1, sizeof(internalNode));
             if (par.parent == 0 || par.cnt >= Mmin)
                 fileWrite(&par, par.offset, 1, sizeof(internalNode));
@@ -802,28 +775,14 @@ namespace sjtu
                 return;
             if (merge_right_node(node))
                 return;
-            internalNode par;//node非头节点且无左右
-            fileRead(&par,node.parent,1,sizeof(internalNode));
-            if (par.parent==0)
+            internalNode par; //node非头节点且无左右
+            fileRead(&par, node.parent, 1, sizeof(internalNode));
+            if (par.parent == 0)
             {
-                info.root=node.offset;
-                node.parent=0;
-                fileWrite(&info,info_offset,1,sizeof(TreeInfo));
-                fileWrite(&node,node.offset,1,sizeof(internalNode));
-            }
-            else{
-                internalNode grandpar;
-                fileRead(&grandpar,par.parent,1,sizeof(internalNode));
-                
-                for(int pos=0;pos<grandpar.cnt;++pos)
-                if(grandpar.child[pos]==par.offset)
-                {
-                    grandpar.child[pos]=node.offset;
-                    break;
-                }
-                node.parent=grandpar.offset;
-                fileWrite(&node,node.offset,1,sizeof(internalNode));
-                fileWrite(&grandpar,grandpar.offset,1,sizeof(internalNode));
+                info.root = node.offset;
+                node.parent = 0;
+                fileWrite(&info, info_offset, 1, sizeof(TreeInfo));
+                fileWrite(&node, node.offset, 1, sizeof(internalNode));
             }
         }
 
@@ -831,12 +790,14 @@ namespace sjtu
         BTree()
         {
             filename.naming("abc");
-            file = nullptr;
-            openFile();
-            if (!fileExist)
+            file = fopen(filename.str, "rb+");
+            if (!file)
             {
+                file = fopen(filename.str, "wb+");
                 buildTree();
             }
+            else
+                fileRead(&info, info_offset, 1, sizeof(TreeInfo));
         }
 
         BTree(const char *fname)
@@ -858,7 +819,7 @@ namespace sjtu
 
         ~BTree()
         {
-            closeFile();
+            fclose(file);
         }
 
         // Clear the BTree
@@ -870,7 +831,7 @@ namespace sjtu
 
         bool insert(const Key &key, const Value &value)
         {
-            off_t leaf_offset = locate_leaf(key, info.root);
+            int leaf_offset = locate_leaf(key, info.root);
             leafNode leaf;
 
             if (info.size == 0 || leaf_offset == 0) //空树
@@ -880,7 +841,7 @@ namespace sjtu
                 if (ret == false)
                     return ret;
 
-                off_t offset = leaf.parent;
+                int offset = leaf.parent;
                 internalNode node;
                 while (offset != 0) //向上设置第一个点的值为新的key直到设置到根节点
                 {
@@ -889,7 +850,7 @@ namespace sjtu
                     fileWrite(&node, offset, 1, sizeof(internalNode));
                     offset = node.parent;
                 }
-                return ret;
+                return true;
             }
             fileRead(&leaf, leaf_offset, 1, sizeof(leafNode));
             bool ret = insertLeaf(leaf, key, value);
@@ -898,27 +859,38 @@ namespace sjtu
 
         bool modify(const Key &key, const Value &value)
         {
-            iterator it = find(key);
-            leafNode p;
-            it.tree->fileRead(&p, it.offset, 1, sizeof(leafNode));
-            p.data[it.place].second = value;
-            it.tree->fileWrite(&p, it.offset, 1, sizeof(leafNode));
-            return true;
+            int leaf_offset = locate_leaf(key, info.root);
+            if (leaf_offset == 0)
+                return end();
+
+            leafNode leaf;
+            fileRead(&leaf, leaf_offset, 1, sizeof(leafNode));
+            for (int i = 0; i < leaf.cnt; i++)
+                if (leaf.data[i].first == key)
+                {
+                    leaf.data[i].second = value;
+                    fileWrite(&leaf, leaf_offset, 1, sizeof(leafNode));
+                    return true;
+                }
         }
 
         Value at(const Key &key)
         {
-            iterator it = find(key);
-            if (it == end())
+            int leaf_offset = locate_leaf(key, info.root);
+            if (leaf_offset == 0)
                 return Value();
+
             leafNode leaf;
-            fileRead(&leaf, it.offset, 1, sizeof(leafNode));
-            return leaf.data[it.place].second;
+            fileRead(&leaf, leaf_offset, 1, sizeof(leafNode));
+            for (int i = 0; i < leaf.cnt; i++)
+                if (leaf.data[i].first == key)
+                    return leaf.data[i].second;
+            return Value();
         }
 
         bool erase(const Key &key)
         {
-            off_t leaf_offset = locate_leaf(key, info.root);
+            int leaf_offset = locate_leaf(key, info.root);
             if (leaf_offset == 0)
                 return false;
             leafNode leaf;
@@ -932,12 +904,9 @@ namespace sjtu
             if (pos == leaf.cnt)
                 return false;
             for (int i = pos + 1; i < leaf.cnt; ++i)
-            {
-                leaf.data[i - 1].first = leaf.data[i].first;
-                leaf.data[i - 1].second = leaf.data[i].second;
-            }
+                leaf.data[i - 1] = leaf.data[i];
             leaf.cnt--;
-            off_t node_offset = leaf.parent;
+            int node_offset = leaf.parent;
             internalNode node;
             while (pos == 0)
             {
@@ -971,8 +940,8 @@ namespace sjtu
 
         private:
             // Your private members go here
-            off_t offset; //offset:迭代器指向的元素所在的叶节点的开头文件中位置
-            int place;    // place：在节点中的第几个（从0开始）
+            int offset; //offset:迭代器指向的元素所在的叶节点的开头文件中位置
+            int place;  // place：在节点中的第几个（从0开始）
             BTree *tree;
 
         public:
@@ -982,7 +951,7 @@ namespace sjtu
                 place = 0;
                 tree = nullptr;
             }
-            iterator(BTree *from, off_t tempoffset = 0, int x = 0)
+            iterator(BTree *from, int tempoffset = 0, int x = 0)
             {
                 tree = from;
                 offset = tempoffset;
@@ -1115,7 +1084,7 @@ namespace sjtu
 
         iterator find(const Key &key)
         {
-            off_t leaf_offset = locate_leaf(key, info.root);
+            int leaf_offset = locate_leaf(key, info.root);
             if (leaf_offset == 0)
                 return end();
 
@@ -1130,14 +1099,38 @@ namespace sjtu
         // return an iterator whose key is the smallest key greater or equal than 'key'
         iterator lower_bound(const Key &key)
         {
-            off_t leaf_offset = locate_leaf(key, info.root);
+            internalNode p;
+            int offset = info.root;
+            fileRead(&p, offset, 1, sizeof(internalNode));
+
+            while (p.type == 0)
+            {
+                int pos;
+                for (pos = 0; pos < p.cnt; pos++)
+                    if (key < p.key[pos])
+                        break;
+                if (pos == 0)
+                    offset = p.child[0];
+                else
+                    offset = p.child[pos - 1];
+                fileRead(&p, offset, 1, sizeof(internalNode));
+            }
+            int pos = 0;
+            int leaf_offset;
+            for (; pos < p.cnt; pos++)
+                if (key < p.key[pos])
+                    break;
+            if (pos == 0)
+                leaf_offset = p.child[0];
+            else
+                leaf_offset = p.child[pos - 1];
 
             leafNode leaf;
             fileRead(&leaf, leaf_offset, 1, sizeof(leafNode));
             for (int i = 0; i < leaf.cnt; i++)
                 if (leaf.data[i].first >= key)
                     return iterator(this, leaf_offset, i);
-            return end();
+            return iterator(this, leaf.next, 0);
         }
     };
 } // namespace sjtu

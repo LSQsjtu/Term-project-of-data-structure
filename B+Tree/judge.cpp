@@ -2,8 +2,10 @@
 #include <cstring>
 #include <cstdio>
 #include <vector>
+#include <ctime>
 #include <map>
 #include "BTree.hpp"
+#pragma GCC optimize(2)
 
 using std::cerr;
 using std::cin;
@@ -54,7 +56,7 @@ void test_clear()
     {
         return;
     }
-    printf("Test Clear Pass.\n");
+    printf("Test Clear Pass!\n");
 }
 
 void test_insert()
@@ -70,7 +72,7 @@ void test_insert()
 
 void test_query()
 {
-    printf("Test Query\n");
+    printf("Test Query.\n");
     sjtu::BTree<int, long long> tree;
     for (int i = 1; i <= n; ++i)
     {
@@ -85,7 +87,7 @@ void test_query()
 
 void test_iterator()
 {
-    printf("Test Iterator Traverse\n");
+    printf("Test Iterator Traverse.\n");
     sjtu::BTree<int, long long> tree;
     std::map<int, long long> mp;
     for (sjtu::BTree<int, long long>::iterator iter = tree.begin(); iter != tree.end(); iter++)
@@ -96,40 +98,58 @@ void test_iterator()
     {
         if (mp[v1[i]] != v2[i])
         {
+            cerr << "Iterator Traverse Error" << endl;
             return;
         }
     }
     printf("Test Iterator Traverse Pass!\n");
 
-    printf("Test Iterator Lower Bound\n");
-    sjtu::BTree<int, long long>::iterator iter = tree.lower_bound(v1[0]);
-    int cnt = 0;
-    for (iter; iter != tree.end(); ++iter)
+    printf("Test Iterator Lower Bound.\n");
+    sjtu::BTree<int, long long>::iterator iter;
+    std::map<int, long long>::iterator mp_iter;
+    for (int i = 0; i < MOD; i += aa * 2)
     {
-        cnt++;
-    }
-    for (int i = 1; i <= n; ++i)
-    {
-        if (v1[i] >= v1[0])
+        mp_iter = mp.lower_bound(i);
+        if (mp_iter == mp.end())
+            continue;
+        iter = tree.lower_bound(i);
+        if (iter.getValue() != mp_iter->second)
         {
-            cnt--;
+            cerr << "Iterator Lower Bound Error" << endl;
+            return;
         }
     }
-    if (cnt != 0)
+    printf("Test Iterator Lower Bound Pass!\n");
+
+    printf("Test Iterator Find.\n");
+    for (int i = 1; i <= n / 4; ++i)
     {
-        return;
+        iter = tree.find(v1[i]);
+        if (iter.getValue() != v2[i])
+        {
+            cerr << "Iterator Find Error" << endl;
+            return;
+        }
     }
-    printf("Test Iterator Lower Bound\n");
+    printf("Test Iterator Find Pass!\n");
 }
 
 void test_erase()
 {
-    printf("Test Erase\n");
+    printf("Test Erase.\n");
     sjtu::BTree<int, long long> tree;
-    for (int i = 1; i <= n / 3; ++i)
+    for (int i = 1; i < n / 2; ++i)
     {
         tree.erase(v1[i]);
         if (tree.at(v1[i]))
+        {
+            cerr << "erase error!" << endl;
+            return;
+        }
+    }
+    for (int i = n / 2; i <= n / 1.5; ++i)
+    {
+        if (tree.at(v1[i]) != v2[i])
         {
             cerr << "erase error!" << endl;
             return;
@@ -140,6 +160,7 @@ void test_erase()
 
 int main()
 {
+    clock_t time_start = clock();
     int type;
     cin >> type;
     make_vector();
@@ -164,4 +185,6 @@ int main()
     {
         // use for debug
     }
+    clock_t time_end = clock();
+    printf("Total time: %.2f ms", 1000 * (time_end - time_start) / (double)CLOCKS_PER_SEC);
 }
